@@ -17,10 +17,18 @@ app.get('/cpu-load/percentage/:pc/seconds/:secs', (req, res) => {
     return
   }
   blockCpuFor(secs, pc)
-  res.send(`Blocking for ${secs} seconds\n`)
+  res.send(`Blocking ${pc}% for ${secs} seconds\n`)
 })
 
-app.listen(PORT, () => console.log(`App listening on port ${PORT}`))
+app.listen(PORT, () => {
+  console.log(`App listening on port ${PORT}`)
+  const initialLoad = process.env.APP_INIT_CPU_PERCENTAGE
+  const initialSecs = process.env.APP_INIT_CPU_SECONDS || 60 * 60
+  if(initialLoad){
+    console.log(`Blocking ${initialLoad}% for ${initialSecs}`)
+    blockCpuFor(initialSecs, initialLoad);
+  }
+})
 
 function blockCpuFor(secs, pc) {
 	const end = Date.now() + (secs * 1000);
