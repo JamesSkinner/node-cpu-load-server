@@ -1,53 +1,91 @@
-'use strict'
+
 
 const express = require('express');
+
 const app = express();
-const PORT = 8888;
 
-app.get('/', (req, res) => res.send('hello\n'))
-app.get('/cpu-load/percentage/:pc/seconds/:secs', (req, res) => {
-  const secs = +req.params.secs;
-  const pc = +req.params.pc;
-  if(Number.isNaN(secs * pc)){
-    res.status(400).send('Need to pass in number of secs and pecentage\n')
-    return
+const conf = {
+  CPU_LOAD_PORT: 8888,
+  CPU_LOAD_DEFAULT_PERCENTAGE: 40,
+  ...filterObj(process.env, (v, k) => k.startsWith('CPU_LOAD_')),
+};
+
+app.get('/', (req, res) => res.send('hello\n'));
+app.get('/cpu-load', (req, res) => {
+  console.log(req.query);
+  const secs = +req.query.secs;
+  const pc = +req.query.pc;
+  if (Number.isNaN(pc)) {
+    res.status(400).send('Percentage must be number\n');
+    return;
   }
-  if(pc > 100 || pc < 1){
-    res.status(400).send('Percentage needs to be...a percentage\n')
-    return
+  if (req.params.secs && Number.isNaN(secs)) {
+    res.status(400).send('Secs must be number\n');
+    return;
   }
-  blockCpuFor(secs, pc)
-  res.send(`Blocking ${pc}% for ${secs} seconds\n`)
-})
-
-app.listen(PORT, () => {
-  console.log(`App listening on port ${PORT}`)
-  const initialLoad = process.env.APP_INIT_CPU_PERCENTAGE
-  const initialSecs = process.env.APP_INIT_CPU_SECONDS || 60 * 60
-  if(initialLoad){
-    console.log(`Blocking ${initialLoad}% for ${initialSecs}`)
-    blockCpuFor(initialSecs, initialLoad);
+  if (pc > 100 || pc < 1) {
+    res.status(400).send('Percentage needs to be...a percentage\n');
+    return;
   }
-})
+  blockCpu({ secs, pc });
+  res.send(`Blocking ${pc}% for ${secs} seconds\n`);
+});
 
-function blockCpuFor(secs, pc) {
-	const end = Date.now() + (secs * 1000);
+app.listen(conf.CPU_LOAD_PORT, () => {
+  console.log('App listening');
+  console.log(JSON.stringify(conf, null, 2));
 
-  blockUntil(end, pc);
+  blockCpu({ pc: conf.CPU_LOAD_DEFAULT_PERCENTAGE });
+});
+
+let activeInteval;
+
+// Set an interval which blocks for given % of a second, then waits for the
+// remaining part of the second before doing the same again
+function blockCpu({ secs, pc }) {
+  console.log(`Blocking CPU ${pc}% for ${secs || '∞'}s`);
+  clearSingleInterval();
+
+  const blockFor = (1000 / 100) * pc;
+  const waitFor = 1000 - blockFor;
+
+  const handler = singleInterval(() => block(blockFor), waitFor);
+  activeInteval = handler;
+  if (secs) {
+    setTimeout(() => {
+      if (activeInteval === handler) {
+        blockCpu({ pc: conf.CPU_LOAD_DEFAULT_PERCENTAGE });
+      }
+    }, secs * 1000);
+  }
 }
 
-// For every second-long chunk, wait for a bit then block for a bit then
-// schedule the next chunk
-function blockUntil(end, pc = 100){
-  if(end < Date.now()) return
-  const blockFor = (1000 / 100) * pc
-  const waitFor = 1000 - blockFor
+function block(blockFor) {
+  const blockEnd = Date.now() + blockFor;
+  while (Date.now() < blockEnd) {
+    Math.random(); // eslint-disable-line
+  }
+}
+
+let intervalId;
+function singleInterval(f, timeout, id) {
+  if (!id) {
+    id = Date.now();
+    intervalId = id;
+  }
   setTimeout(() => {
-    // block for a certain amount of time them schedule the next chunk
-    const blockEnd = Date.now() + blockFor
-    while(Date.now() < blockEnd) {
-      Math.random() * Math.random();
-    }
-    blockUntil(end, pc)
-  }, waitFor)
+    if (id !== intervalId) return;
+    f();
+    singleInterval(f, timeout, id);
+  }, timeout);
+  return id;
+}
+function clearSingleInterval() {
+  intervalId = null;
+}
+
+function filterObj(obj, filter) {
+  return Object.entries(obj)
+    .filter(([k, v]) => filter(v, k))
+    .reduce((acc, [k, v]) => ({ ...acc, [k]: v }), {});
 }
