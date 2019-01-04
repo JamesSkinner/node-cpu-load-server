@@ -1,12 +1,73 @@
 
 parserOptions:
-  ecmaVersion: 2017
-
-env:
-  node: true
+  ecmaVersion: 2018
+  sourceType: module
 
 extends :
-  - eslint:recommended
+  - airbnb-base
 
 rules:
+
+  # Airbnb has this to guard against hoisting bugs, personally I think this is
+  # rare and preventing it makes code less readable
+  no-use-before-define: off
+
+  # Airbnb disallows syntax like for..in dues to browser polyfill issues
+  no-restricted-syntax: off
+
+  # Can be useful for only loading a module after a condition
+  global-require: off
+
+  # This is usually intentional if used
+  no-await-in-loop: off
+
+  # Valid uses for writing to properties of function params: The page object
+  # is passed around and built up by various functions
+  # Also using [].reduce to build up a map
+  # We want to be able to do opts => { opts = opts || {}; ...}
+  no-param-reassign: off
+
+  default-case: off
+
+  radix: off
+
+  # This rule is too strict and applies to objects you didn't create
+  no-underscore-dangle: off
+
+  no-return-assign: error
+
+  # Swtich off array asignment requirement as it triggers for things like:
+  # const x = someArray[12]
+  prefer-destructuring:
+    - error
+    - AssignmentExpression:
+        array: false
+
+  # Needed to map operation to service file
+  import/no-dynamic-require: off
+
+  # I think this makes sense but would be cusing to add it in for modules
+  # that are already exporting in another way
+  import/prefer-default-export: off
+
+  # Just annoying
+  guard-for-in: off
+
+  no-plusplus: off
+
+  import/no-extraneous-dependencies:
+    - warn
+    - devDependencies:
+      - test/**/*.js
+      - script/**/*.js
+
+  # Prettier normalises this on push and this is annoying for windows dev
+  linebreak-style: off
+
   no-console: off
+
+overrides:
+  - files:
+      - test/**/*.js
+    env:
+      mocha: true
